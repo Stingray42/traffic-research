@@ -1,15 +1,17 @@
 import os.path
+
+os.environ['LOGURU_LEVEL'] = 'INFO'
+
+import model
+
 from datetime import datetime
 
 import dill
 import hurst
-import scipy.signal
 import scipy.stats
 
-from generator import RandomSequenceGenerator
-from model import OnOffSource, Multiplexer
+from model import ExponentialCorr
 
-os.environ['LOGURU_LEVEL'] = 'INFO'
 from loguru import logger
 
 from plots import *
@@ -29,21 +31,21 @@ if __name__ == '__main__':
         end = datetime.now()
         logger.info('loading complete in {}', end - start)
     else:
-        pareto = scipy.stats.pareto(1, loc=0, scale=1.0)
+        model.dt = 1e-3
+        weibull = scipy.stats.weibull_min(0.5, loc=0, scale=1.0)
         sources = []
-        corr = 'exponential'
+        corr = ExponentialCorr(25, 1)
         rng = np.random.default_rng(0)
-        for i in range(1):
-            generator1 = RandomSequenceGenerator(5000, 25, 1, ('weibull_heavy', pareto.cdf), corr)
-            generator2 = RandomSequenceGenerator(5000, 25, 1, ('weibull_heavy', pareto.cdf), corr)
+        for i in range(2):
+            generator1 = RandomSequenceGenerator(5000, weibull, corr)
+            generator2 = RandomSequenceGenerator(5000, weibull, corr)
             g1 = iter(generator1.start())
             g2 = iter(generator2.start())
             logger.debug('on generator: {}, off generator: {}', g1, g2)
             source = OnOffSource(
                 random_ipv4(rng),
                 1_000_000,
-                # packet_size[i],
-                lambda: 64 + 2 ** np.clip(rng.pareto(1.2), None, 13.125),
+                lambda: 1500,
                 lambda x=g1: next(x),
                 lambda x=g2: next(x),
                 None
@@ -55,7 +57,7 @@ if __name__ == '__main__':
             # df = source.start().to_dataframe()
             # df['timestamp'] = pd.to_timedelta(df['timestamp'], unit='ms')
 
-        multiplexer = Multiplexer(sources, 10_000_000)
+        multiplexer = Multiplexer(sources, 1_000_000)
         df = multiplexer.start().to_dataframe()
         df['timestamp'] = pd.to_timedelta(df['timestamp'], unit='ms')
         series = df.resample("1ms", on='timestamp').count()['bytes']
@@ -63,7 +65,7 @@ if __name__ == '__main__':
         print(H)
         # df.to_csv('data.csv', index=False)
         # with open(filename, 'wb') as file:
-        # dill.dump(multiplexer, file)
+        #     dill.dump(multiplexer, file)
 
     plot_multiplexed_packets(multiplexer)
     plot_multiplexed_stats(multiplexer)

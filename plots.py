@@ -11,7 +11,8 @@ from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from numpy.typing import NDArray
 
-from main import OnOffSource, autocorrelation, RandomSequenceGenerator, tx_delay, Multiplexer
+from generator import RandomSequenceGenerator
+from model import OnOffSource, autocorrelation, tx_delay, Multiplexer
 
 _COLORS = plt.style.library['bmh']['axes.prop_cycle'].by_key()['color']
 _HATCHES = ['', '///', 'o', '\\\\', '.']
@@ -96,7 +97,7 @@ def _plot_correlation(ax: Axes, on: NDArray[float], off: NDArray[float], generat
     ax.vlines(corr_range + d_shift, 0, off_corr, color=_color(3))
 
     if generator:
-        theor_corr = generator.corr.correlation(corr_range)
+        theor_corr = generator.correlation(corr_range)
         ax.plot(corr_range, theor_corr, color=_color(1), label='Теоретические данные')
 
     ax.xaxis.set_major_locator(matplotlib.ticker.MaxNLocator(integer=True))
@@ -111,7 +112,6 @@ def plot_multiplexed_packets(multiplexer: Multiplexer):
         a.set_xlim(0, time_limit)
         a.grid(False)
 
-    multiplexed = multiplexer.start()
     for i, source in enumerate(multiplexer.sources):
         plot_config = {
             'color': _color(i),
@@ -124,10 +124,18 @@ def plot_multiplexed_packets(multiplexer: Multiplexer):
             if p.timestamp >= time_limit:
                 break
             data_before.append((p.timestamp, tx_delay(p.bytes, source.data_rate)))
+
+        on_off = []
+        for j, (off, on) in enumerate(zip(source.off_durations, source.on_durations)):
+            if j == 0:
+                on_off.append((off, on))
+            else:
+                on_off.append((sum(on_off[j - 1]) + off, on))
         ax[i].broken_barh(data_before, (0, 1), **plot_config)
+        ax[i].broken_barh(on_off, (0, 0.1), color='lime', edgecolor='black')
 
         data_after = []
-        for p in multiplexed:
+        for p in multiplexer.start():
             if p.timestamp >= time_limit:
                 break
             if p.src_ip == source.src_ip:
@@ -159,7 +167,7 @@ def plot_multiplexed_stats(multiplexer: Multiplexer):
     off = df['timestamp'].diff().fillna(0)
     _plot_random_sequence(ax[0], off)
     ax[1].hist(off, bins=np.linspace(off.min(), off.max(), 50))
-    ax[1].set_ylim(0, 1000)
+    # ax[1].set_ylim(0, 1000)
 
     on_corr = autocorrelation(off)
     on_corr[1::2] = np.nan

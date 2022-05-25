@@ -46,7 +46,8 @@ class RandomSequenceGenerator:
             try:
                 seeds = pd.read_csv('seeds.csv')
                 matched_seeds = seeds[
-                    (seeds['tau0'] == self.correlation.tau0)
+                    (seeds['L'] == self.L)
+                    & (seeds['tau0'] == self.correlation.tau0)
                     & (seeds['sigma'] == self.correlation.sigma)
                     & (seeds['corr'] == self.correlation.name)
                     & (seeds['cdf'] == str(self.distribution))
@@ -80,7 +81,9 @@ class RandomSequenceGenerator:
                     theor_corr = self.correlation(np.arange(0, len(exper_corr)))
                     mse = ((exper_corr - theor_corr) ** 2).mean()
                     logger.debug('seed: {},\tp: {},\tmse: {}', seed, p, mse)
-                    seed += 1
+                    seed = seed + 1
+                    if seed in RandomSequenceGenerator._used_seeds:
+                        seed += 1
 
                 logger.info('seed: {},\tp: {},\tmse: {}', seed, p, mse)
                 seeds = seeds.append({

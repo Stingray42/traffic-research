@@ -143,12 +143,15 @@ class OnOffSource:
                 while on_duration < on_time and sent_bytes < self.max_bytes:
                     packet_bytes = int(self.packet_size())
                     delay = tx_delay(packet_bytes, self.data_rate)
-                    # if on_duration + delay > on_time:
-                    #     break
+                    if on_duration + delay > on_time:
+                        # break
+                        packet_bytes = packet_bytes / delay * (on_time - on_duration)
+                        delay = on_time - on_duration
                     result.append(Packet(self.src_ip, timestamp, packet_bytes))
                     sent_bytes += packet_bytes
                     on_duration += delay
                     timestamp += delay
+                timestamp += on_time - on_duration
                 sent_after = len(result)
                 logger.debug('sent {} packets during on period', sent_after - sent_before)
         except StopIteration:
@@ -169,10 +172,10 @@ def _statistic_update(statistic: List[int], diff: int):
 class Multiplexer:
     sources: List[OnOffSource]
     data_rate: int
-    queue: Deque[Packet] = collections.deque()
-    out: Deque[Packet] = collections.deque()
 
     _result: Packets = None
+    queue: Deque[Packet] = field(default_factory=collections.deque)
+    out: Deque[Packet] = field(default_factory=collections.deque)
     queue_len_count: List[int] = field(default_factory=list)
     queue_len_bytes: List[int] = field(default_factory=list)
 
